@@ -3,6 +3,8 @@ import cors from "cors" ;
 import { simpleGit, type SimpleGit, CleanOptions } from 'simple-git' ;
 import path from "path" ;
 import { generate } from "./utils.js" ;
+import { fileURLToPath } from "url";
+import { getAllFiles } from "./file.js";
 
 const app = express() ; 
 app.use(cors());
@@ -24,11 +26,16 @@ app.post("/deploy", async (req, res) => {
     }
 
     const id = generate() ;
-    const outputDir = path.resolve(`output/${id}`) ;
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const outputDir = path.resolve(__dirname, "output", id) ;
 
     try {
         console.log(`cloning ${repoUrl} into ${outputDir}...`) ;
         await git.clone(repoUrl, outputDir) ;
+
+        console.log(getAllFiles(outputDir)) ;
 
         res.status(200).json({
             message: "Repository cloned successfully."
