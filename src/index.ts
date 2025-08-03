@@ -8,7 +8,7 @@ import path from "path" ;
 import { generate } from "./utils.js" ;
 import { fileURLToPath } from "url";
 import { getAllFiles } from "./file.js";
-import { uploadFile } from "./aws.js";
+import { uploadFile, pushToSQS } from "./aws.js";
 
 const app = express() ; 
 app.use(cors());
@@ -44,6 +44,8 @@ app.post("/deploy", async (req, res) => {
         files.forEach(async file => {
             await uploadFile(file.slice(__dirname.length + 1), file) ;
         }) ;
+
+        pushToSQS(id) ;
 
         res.status(200).json({
             message: "Repository cloned successfully."
