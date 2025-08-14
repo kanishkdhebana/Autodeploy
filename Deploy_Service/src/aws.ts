@@ -1,11 +1,12 @@
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
-import { S3Client, ListObjectsV2Command, GetObjectCommand, ObjectLockEnabled } from "@aws-sdk/client-s3";
+import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, ObjectLockEnabled } from "@aws-sdk/client-s3";
 import type { GetObjectCommandOutput } from "@aws-sdk/client-s3";
 import fs from "fs" ;
 import path from "path" ;
 import stream from "stream" ;
 import { promisify } from "util";
 import { fileURLToPath } from "url";
+import { getAllFiles } from "./file.js";
 
 function getSQSClient() {
     const region = process.env.AWS_REGION ;
@@ -86,6 +87,8 @@ export async function receiveMessageFromSQS() {
         const data = await sqs.send(new ReceiveMessageCommand(params)) ;
 
         if (data.Messages && data.Messages.length > 0) {
+            const ids = [] ;
+
             for (const message of data.Messages) {
                 console.log("Received Message: ", message.Body) ;
 
@@ -94,21 +97,25 @@ export async function receiveMessageFromSQS() {
 
                 if (messageBody) {
                     const { id } = JSON.parse(messageBody) ;
-
-                    await downloadAllFilesFromS3(`output/${id}`) ;
+                    ids.push(id) ;
                 }
 
                 if (message.ReceiptHandle) {
-                    await deleteMessageFromQueue(message.ReceiptHandle) ;
+                    // await deleteMessageFromQueue(message.ReceiptHandle) ;
                 } else {
                     console.warn("Message is missing ReceiptHandle, cannot delete from queue.") ;
                 }
             }
+
+            return ids ;
+
         } else {
             console.log("No message Received") ;
+            return [] ;
         }
     } catch (error) {
         console.error("Error receiving message from sqs.", error) ;
+        throw error ;
     }
 }
 
@@ -173,8 +180,6 @@ async function downloadFileFromS3(fileName: string, localDir: string) {
             writer.on("error", () => reject()) ;
         }) ;
 
-        console.log(`Downloaded ${fileName} to ${localFilePath}`);
-
     } catch (error) {
         console.error(`Error downloading ${fileName}`, error);
         throw error;
@@ -182,7 +187,7 @@ async function downloadFileFromS3(fileName: string, localDir: string) {
 }
 
 
-async function downloadAllFilesFromS3(s3Path: string) {
+export async function downloadAllFilesFromS3(s3Path: string) {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const localPath = path.join(__dirname, "") ;
 
@@ -202,9 +207,7 @@ async function downloadAllFilesFromS3(s3Path: string) {
                 }
 
                 try {
-                    console.log(`Downloading ${fileName} to ${localFilePath}`) ;
                     await downloadFileFromS3(fileName, localPath) ; 
-                    console.log(`Downloaded ${fileName} successfully.`) ;
 
                 } catch (err) {
                     console.error(`Failed to download ${fileName}:`, err) ; 
@@ -212,8 +215,61 @@ async function downloadAllFilesFromS3(s3Path: string) {
             }          
         }
 
+        console.log(`Downloaded ${files.length} files from s3`) ;
+
     } catch (error) {
          console.error("Error during download", error) ;
     }
 }
+
+
+export const uploadFile = async (fileName: string, localFilePath: string) => {
+    const bucketName = process.env.AWS_BUCKET_NAME ;
+    if (!bucketName) throw new Error("Missing BUCKET_NAME") ;
+
+    try {
+        const s3 = getS3Client() ;
+        const fileContent = fs.readFileSync(localFilePath) ;
+
+        const command = new PutObjectCommand({
+            Bucket: bucketName, 
+            Key: fileName,
+            Body: fileContent,
+        }) ;
+
+        const response = await s3.send(command) ;
+        console.log("Uploded file successfully.") ;
+        return response ;
+    
+    } catch (error) {
+        console.error(`Error uploading ${fileName} to s3.`, error) ;
+        throw error ;
+    }
+    
+}
+
+
+export async function copyFinalBuildToS3(id: string, buildFolder = "build") {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const outputDir = path.join(__dirname, `output/${id}/${buildFolder}`) ;
+
+    try {
+        const files = getAllFiles(outputDir) ;
+
+        await Promise.all(
+            files.map(file => {
+                const relativeKey = path.relative(__dirname, file) ;
+                return uploadFile(relativeKey, file) ;
+            })
+        );
+
+        console.log(`Uploaded ${files.length} files for ID: ${id}`);
+
+    } catch (error) {
+         console.error("Error during upload", error) ;
+         throw error ;
+    }
+}
+
+
 
