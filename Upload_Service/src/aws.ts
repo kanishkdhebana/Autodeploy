@@ -85,7 +85,6 @@ export const uploadFile = async (fileName: string, localFilePath: string) => {
         }) ;
 
         const response = await s3.send(command) ;
-        console.log("Uploded file successfully.") ;
         return response ;
     
     } catch (error) {

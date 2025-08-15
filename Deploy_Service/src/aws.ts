@@ -238,7 +238,6 @@ export const uploadFile = async (fileName: string, localFilePath: string) => {
         }) ;
 
         const response = await s3.send(command) ;
-        console.log("Uploded file successfully.") ;
         return response ;
     
     } catch (error) {
@@ -252,14 +251,16 @@ export const uploadFile = async (fileName: string, localFilePath: string) => {
 export async function copyFinalBuildToS3(id: string, buildFolder = "build") {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const outputDir = path.join(__dirname, `output/${id}/${buildFolder}`) ;
-
+    
     try {
         const files = getAllFiles(outputDir) ;
 
         await Promise.all(
             files.map(file => {
-                const relativeKey = path.relative(__dirname, file) ;
-                return uploadFile(relativeKey, file) ;
+                const relativeKey = path.relative(outputDir, file) ;
+                const s3Key = path.join('build', id, relativeKey); 
+
+                return uploadFile(s3Key, file) ;
             })
         );
 
