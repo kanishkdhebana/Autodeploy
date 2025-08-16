@@ -1,4 +1,4 @@
-# Vercel-like Static Hosting Platform
+# Autodeploy: A Static Hosting Platform
 
 A scalable, multi-tenant static hosting platform built with **TypeScript** and **AWS**, designed to automate deployments of web projects directly from a Git repository.
 
