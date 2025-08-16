@@ -2,7 +2,6 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import express from "express" ;
-import path from 'path';
 import { Readable } from 'stream';
 import { getFile } from "./aws.js"
 
